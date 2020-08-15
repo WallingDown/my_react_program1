@@ -1,3 +1,4 @@
+// 关于antd、装饰器、短路径的设置
 const {
   override,
   fixBabelImports,
@@ -31,7 +32,7 @@ module.exports = override(
 	}),
 	//用于支持装饰器语法
 	addDecoratorsLegacy(),
-	//用于支持短路径
+	//用于支持短路径，不写程序报错
   addWebpackAlias({
     "@": resolvePath("./"),
   })
