@@ -32,3 +32,27 @@ export function reqNo2SubjectById(parentId) {
     method: "GET",
   });
 }
+
+/**
+ * 根据分类的id更新分类名字
+ * @param {*} id  分类id
+ * @param {*} title  分类名
+ */
+export function reqUpdateSubject(id,title) {
+  return request({
+    url:`${BASE_URL}/update`,
+    data:{id,title},
+    method: "PUT",
+  });
+}
+
+/**
+ * 删除
+ * @param {*} id 
+ */
+export function reqDeleteSubject(id) {
+  return request({
+    url:`${BASE_URL}/remove/${id}`,
+    method: "DELETE",
+  });
+}

@@ -1,17 +1,25 @@
 import React, { Component,Fragment } from 'react'
-import { Card, Button, Table, Tooltip } from 'antd'
-import { PlusOutlined, FormOutlined, DeleteOutlined } from '@ant-design/icons'
-import { reqNo1SubjectPaging,reqNo2SubjectById} from '@/api/edu/subject'
+import { Card, Button, Table, Tooltip, Input,message,Modal } from 'antd'
+import { PlusOutlined, FormOutlined, DeleteOutlined,QuestionCircleOutlined } from '@ant-design/icons'
+import { 
+  reqNo1SubjectPaging,
+  reqNo2SubjectById,
+  reqUpdateSubject,
+  reqDeleteSubject} from '@/api/edu/subject'
 import './index.less'
+// 从Modal引入confirm提示组件
+const {confirm} = Modal
 
 export default class Subject extends Component {
-
+    subjectRef = React.createRef()
     state = {
       no1SubjectInfo:{total:0,items:[]}, //一级分类数据
       pageSize:5, //每页条数
       loading:false,//默认是false
-      expandedIds:[] //代表展开项的id组成的数组，初始值为空
-
+      expandedIds:[], //代表展开项的id组成的数组，初始值为空
+      editId:'', //当前正在编辑分类的id
+      editTitle:"",//当前正在编辑分类的title
+      pageNumber:1//初始页码
     }
 
     componentDidMount(){
@@ -22,7 +30,7 @@ export default class Subject extends Component {
     // 请求所有一级分类的数据
     getNo1SubjectPaging = async (pageNumber=1,pageSize=this.state.pageSize)=> {
       // 展示loading
-      this.setState({loading:true})
+      this.setState({loading:true,pageSize,pageNumber})
       // 请求一级分类数据
     // async getAllNo1SubjectPaging(pageNumber=1,pageSize=this.state.pageSize){
       const result = await reqNo1SubjectPaging(pageNumber,pageSize)
@@ -90,38 +98,140 @@ export default class Subject extends Component {
       this.setState({expandedIds:ids})
       }
      
+    // 点击修改的确定按钮
+    updateSubject = async() =>{
+        const {editId,editTitle,no1SubjectInfo} = this.state
+        //封装更新数据的方法
+        const handleData = arr =>{
+          return arr.map((subject)=>{
+            if (subject._id === editId) {
+              subject.title = editTitle
+            } else {
+              //如果某一级分类有children，继续去children里找
+              if(subject.children) handleData(subject.children)
+            }
+            return subject
+          })
+        }
+        // 1、获取当前编辑项的id + 用户的输入
+        if (!editTitle.trim()) {
+            message.error('分类名不能为空！',0.5)
+            return
+          }
+        // 2、发请求更新数据
+        await reqUpdateSubject(editId,editTitle)
+        // 3、手动维护本地状态
+        const updatedSubject1Arr = handleData(no1SubjectInfo.items)
+          // 4、维护进状态
+          this.setState(
+            {
+              no1SubjectInfo:{...no1SubjectInfo,items:updatedSubject1Arr},//更新分类信息
+              editId:'',//清空编辑的id
+              editTitle:''//清空编辑的title
+            })
+    }
+
+    //  点击删除按钮的回调
+    handleDelete = (subject) =>{
+      const {pageNumber,pageSize,no1SubjectInfo} = this.state
+     confirm({
+     title: <h4>确认删除<span className="alert-info">{subject.title}</span>吗？</h4>,//主标题
+      icon: <QuestionCircleOutlined />,//图标
+      content: '删除后无法恢复，请谨慎操作！',//副标题
+      okText: '确认',
+      cancelText: '取消',
+      onOk:async()=>{
+        console.log('发送请求')
+        await reqDeleteSubject(subject._id)
+        this.getNo1SubjectPaging(
+          pageNumber > 1 && no1SubjectInfo.items.length === 1 ?
+          pageNumber-1 :
+          pageNumber,pageSize
+
+        )
+        if (no1SubjectInfo.items.length === 1) this.setState({pageNumber:pageNumber-1})
+      }
+     })
+    }
+
 
   render() {
-    const {no1SubjectInfo,pageSize,expandedIds,loading} = this.state
+    const {no1SubjectInfo,pageSize,pageNumber,expandedIds,loading,editId} = this.state
     // 表格中的数据源（这里设置的是假数据，之后会通过请求从服务器获取数据）
     let dataSource = no1SubjectInfo.items
     //  表格的列配置（根据设计文档写）
     const columns = [
       {
         title: '分类名',
-        dataIndex: 'title',//数据索引项————决定该列展示啥
+        // dataIndex: 'title',//数据索引项————决定该列展示啥
         key: 'title',
+        render:(item) =>  
+          item._id === editId ? 
+          <Input 
+          defaultValue={item.title}
+          onChange={event => this.setState({editTitle:event.target.value})}
+          className="edit_input" 
+          type="text"/> : 
+          item.title
+        
       },
       {
         title: '操作',
         width: '200px',
         align: 'center',
-        dataIndex: 'btn',
+        // dataIndex: 'item',
         key: 'btn',
-        render: () => (
+       
+      //   (1) dataIndex和render同时存在：
+      //          渲染结果的时候以render为准
+      //          dataIndex所指定的属性，会作为参数传递给render
+      //  (2)不写dataIndex，就会传递给render整个数据项
+     // 高级动态操作
+        render: (subject) => (
+          subject._id === editId ?
+          <Fragment>
+            <Button 
+              size="small" 
+              type="primary" 
+              className="left-btn"
+              onClick={this.updateSubject}
+              >确定</Button>
+            <Button 
+              size="small"
+              onClick={()=> this.setState({editId:'',editTitle:''})}
+             >取消</Button>
+          </Fragment> :
           <Fragment>
             <Tooltip placement="top" title="编辑分类">
-            <Button type="primary" className="left-btn" icon={<FormOutlined />} />
+            <Button 
+              type="primary" 
+              onClick={()=> this.setState({editId:subject._id,editTitle:subject.title})} 
+              className="left-btn"  
+              icon={<FormOutlined />} 
+            />
             </Tooltip>
             <Tooltip placement="top" title="删除分类">
-            <Button type="danger" icon={<DeleteOutlined />} />
+            <Button 
+              type="danger" 
+              icon={<DeleteOutlined />} 
+              onClick={()=>this.handleDelete(subject)}
+            />
             </Tooltip>
           </Fragment>
         )
       }
     ];
     return (
-      <Card title={<Button type="primary" icon={<PlusOutlined />}>新增分类</Button>}>
+      <Card 
+        title={
+          <Button 
+            onClick={()=>this.props.history.push('/edu/subject/add')} 
+            type="primary" 
+            icon={<PlusOutlined />}
+          >
+            新增分类
+          </Button>}
+      >
         <Table 
         loading={loading}
         dataSource={dataSource}  // 指定表格的数据
@@ -141,6 +251,7 @@ export default class Subject extends Component {
           pageSize:pageSize, //每页条数,
           showSizeChanger:true,//是否显示每页条数的切换器
           pageSizeOptions:['3','4','5','10','15'],
+          current:pageNumber,
           onShowSizeChange:(_,pageSize)=>{ //页大小改变的回调
             this.getNo1SubjectPaging(1,pageSize)
             this.setState({pageSize})
